@@ -3,20 +3,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>از خاک تا تاج — نسخه ۲</title>
 <style>
-:root{--bg:#f1eee3;--fg:#222;--card:#fff;--bd:#d6d0bd;--ac:#3a7d44;--warn:#d4a017;--bad:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1f17;--fg:#eee;--card:#282d22;--bd:#444b3a}}
-:root[data-theme="dark"]{--bg:#1b1f17;--fg:#eee;--card:#282d22;--bd:#444b3a}
+:root{--bg:#f1eee3;--fg:#222;--card:#fff;--bd:#d6d0bd;--ac:#3a7d44;--warn:#d4a017;--bad:#c0392b}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1f17;--fg:#eee;--card:#282d22;--bd:#444b3a}}
 html,body{margin:0;background:var(--bg);color:var(--fg);font-family:Tahoma,system-ui,sans-serif;font-size:14px}
-body{padding:6px;max-width:1100px;margin:auto}
+body{padding:6px;max-width:1100px;margin:auto;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 #top{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
 .chip{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 8px;display:flex;align-items:center;gap:6px}
 #w{position:relative}
 canvas#c{width:100%;height:auto;display:block;border-radius:8px;border:1px solid var(--bd);touch-action:none;background:#101410}
 #zb{position:absolute;left:6px;top:6px;display:flex;flex-direction:column;gap:4px}
-#zb button{width:34px;height:34px;padding:0;font-size:18px;background:rgba(255,255,255,.85);color:#222}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #zb button{background:rgba(40,45,34,.85);color:#eee}}
+#zb button{width:34px;height:34px;padding:0;font-size:18px;background:rgba(255,255,255,.85);color:#222;border-radius:8px;border:1px solid var(--bd)}
 #mini{position:absolute;right:6px;top:6px;background:rgba(0,0,0,.75);border:1px solid var(--bd);border-radius:6px;padding:2px}
 #mini canvas{display:block;width:170px;height:auto;image-rendering:pixelated;border-radius:4px}
+#err{display:none;background:#c0392b;color:#fff;padding:8px;border-radius:6px;margin-bottom:6px;font-size:12px;white-space:pre-wrap}
 #msg{min-height:20px;margin:6px 0;opacity:.9;padding:4px 6px}
 .p{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px;margin-bottom:6px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:3px 0;flex-wrap:wrap}
@@ -26,7 +25,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .bb{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
 .jgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:3px}
 .jgrid .row{font-size:12px;margin:0;padding:2px 4px}
-#hb{height:8px;background:var(--bd);border-radius:4px;overflow:hidden;flex:1;max-width:130px;min-width:60px}
+#hb{display:inline-block;height:8px;width:100px;background:var(--bd);border-radius:4px;overflow:hidden;vertical-align:middle}
 #hb>i{display:block;height:100%;background:var(--ac);transition:width .3s,background .3s}
 #hb.mid>i{background:var(--warn)}
 #hb.low>i{background:var(--bad)}
@@ -34,12 +33,14 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .small{font-size:11px;opacity:.75}
 </style></head><body>
 
+<div id="err"></div>
+
 <div id="top">
-<span class="chip" id="era"></span>
-<span class="chip" id="ses"></span>
-<span class="chip" id="rs"></span>
-<span class="chip" id="pop"></span>
-<span class="chip">😊 <div id="hb"><i style="width:60%"></i></div></span>
+<span class="chip" id="era">🏛️</span>
+<span class="chip" id="ses">☀️</span>
+<span class="chip" id="rs">🍖0</span>
+<span class="chip" id="pop">👥0</span>
+<span class="chip">😊 <span id="hb"><i style="width:60%"></i></span></span>
 </div>
 
 <div id="w">
@@ -48,7 +49,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
   <div id="mini"><canvas id="mc" width="192" height="128"></canvas></div>
 </div>
 
-<div id="msg"></div>
+<div id="msg">در حال بارگذاری…</div>
 
 <div class="p" id="sp" style="display:none">
   <div class="row"><span id="sn"></span><button id="ub"></button></div>
@@ -77,13 +78,21 @@ button:disabled{opacity:.4;cursor:not-allowed}
 
 <script>
 'use strict';
+
+// نمایش خطا در صفحه
+window.onerror=function(msg,url,line,col,err){
+  const el=document.getElementById('err');
+  if(el){el.style.display='block';el.textContent='خطا: '+msg+' (خط '+line+')';}
+  return false;
+};
+
 const $=i=>document.getElementById(i);
 const rnd=(a,b)=>a+Math.random()*(b-a);
-const fa=n=>Math.round(n).toLocaleString('fa-IR');
+const fa=n=>Math.round(Number(n)||0).toLocaleString('fa-IR');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 // ===== ثابت‌ها =====
-const T=16,W=192,H=128,VW=960,VH=600; // T از 24 به 16 کاهش یافت تا در موبایل کرش نکند
+const T=24,W=192,H=128,VW=960,VH=600;
 const cv=$('c'),g=cv.getContext('2d');cv.width=VW;cv.height=VH;
 
 const COST={
@@ -129,7 +138,7 @@ const TECHS={
 
 // ===== وضعیت =====
 let M,RS,SH,RD,BG,R,V,B,J,P,TR,ex,cam,z,tool,selB,tm,S,night,nd,spd=1,spT,stT,rgT,lsT,fgT,auT,won,last=0,autoOn=true,drag=null,hov=null,eraI=0,Q=[],L={1:[],2:[],3:[]};
-let fog,terrainCanvas,terrainCtx,terrainDirty=true,fogCanvas,fogCtx,lastSeason=-1;
+let fog,fogCanvas,fogCtx;
 let wolves=[],happy=60,nextWolfT=90,nextEventT=90,recentFamine=false;
 let techUnlocked={};
 let miniCv,miniCtx,miniT=0;
@@ -154,7 +163,7 @@ function init(){
     const t=i%2?1:3;if(M[y][x]==0){M[y][x]=t;RS[y][x]=5}
   }
   R={food:40,wood:30,stone:0,gold:10,lumber:0,flour:0,bread:0};
-  P=5;B=[];const c={t:'camp',x:W/2,y:H/2,lv:1,done:true,p:0,up:false};B.push(c);BG[c.y][c.x]=c;
+  P=5;B=[];const c={t:'camp',x:Math.floor(W/2),y:Math.floor(H/2),lv:1,done:true,p:0,up:false};B.push(c);BG[c.y][c.x]=c;
   TR={x0:W/2-20,y0:H/2-16,x1:W/2+20,y1:H/2+16};
   ex=0;J={wood:2,stone:0,food:2,farm:0,mine:0,lumber:0,mill:0,bake:0,build:1,scout:0,guard:0};
   V=[];syncU();
@@ -163,10 +172,9 @@ function init(){
   wolves=[];happy=60;nextWolfT=90;nextEventT=90;recentFamine=false;techUnlocked={};
   fog=new Uint8Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++)
     if(Math.hypot(x-W/2,y-H/2)<15)fog[y*W+x]=1;
-  terrainDirty=true;lastSeason=-1;
   updateFog(true);
   buildUI();updateTechUI();
-  msg('قبیلت شروع شد. چوب جمع کن، خانه بساز، جاده بکش، و مراقب گرگ‌ها باش!');
+  msg('قبیلت شروع شد. چوب جمع کن، خانه بساز، جاده بکش، مراقب گرگ‌ها باش!');
   auto();
 }
 
@@ -214,7 +222,7 @@ function load(){
     V=(d.V||[]).map(v=>({...nv(),x:v.x,y:v.y,job:v.job}));
     z=0.85;cam={x:W*T/2-VW/z/2,y:H*T/2-VH/z/2};
     wolves=[];nextWolfT=90;nextEventT=90;recentFamine=false;
-    terrainDirty=true;lastSeason=-1;updateFog(true);
+    updateFog(true);
     buildUI();updateTechUI();
     document.querySelectorAll('[data-s]').forEach(x=>x.classList.toggle('on',+x.dataset.s==spd));
     msg('📂 بازی بارگذاری شد');
@@ -317,7 +325,6 @@ function step(v,dt){
     if(!v.w||mv(v.w[0],v.w[1]))
       v.w=[Math.max(1,Math.min(W-1,v.x+rnd(-4,4))),Math.max(1,Math.min(H-1,v.y+rnd(-4,4)))];
   };
-  // اگر گرگ نزدیک است و نگهبان نیست → فرار
   const wolf=nearW(v,3);
   if(wolf&&v.job!='guard'){
     const dx=v.x-wolf.x,dy=v.y-wolf.y,d=Math.hypot(dx,dy)||1;
@@ -352,7 +359,6 @@ function step(v,dt){
       return;
     }
 
-    // زنجیره تولید
     if(INP[v.job]){
       const b=tg.b;if(!b||!b.done){v.st='seek';return}
       const inp=INP[v.job],out=OUT[v.job];
@@ -363,7 +369,6 @@ function step(v,dt){
       v.ct=ok;v.st='ret';return;
     }
 
-    // جمع‌آوری خام
     if(v.job=='farm'||v.job=='mine'){
       const lv=tg.b.lv;
       let base=v.job=='farm'?(S==3?0:5):5;
@@ -389,7 +394,7 @@ function step(v,dt){
   }
 }
 
-// ===== گرگ‌ها و رزم =====
+// ===== گرگ‌ها =====
 function spawnWolf(){
   const side=Math.floor(Math.random()*4);let x,y;
   if(side==0){x=rnd(0,W);y=1}
@@ -493,7 +498,7 @@ function fireEvent(){
   }
 }
 
-// ===== آپدیت اصلی =====
+// ===== آپدیت =====
 function upd(dt){
   tm+=dt;
   S=Math.floor(tm/45)%4;
@@ -527,16 +532,13 @@ function upd(dt){
         M[y][x]=1;RS[y][x]=5;break;
       }
     }
-    terrainDirty=true;
   }
 
   auT+=dt;if(autoOn&&auT>6){auT=0;auto()}
 
-  // فرگ
   fgT-=dt;
   if(fgT<=0){fgT=0.3;updateFog()}
 
-  // رویداد
   nextEventT-=dt;
   if(nextEventT<=0){nextEventT=Math.max(60,120-era()*10);fireEvent()}
 
@@ -544,7 +546,6 @@ function upd(dt){
   if(e>eraI){eraI=e;msg('🎉 عصر جدید: '+ERA[e])}
   if(!won&&e==4){won=true;msg('👑 تبریک! از قبیله به کشور رسیدی!')}
 
-  // ذرات
   for(const b of B)if(b.done&&Math.random()<dt*(b.t=='camp'?5:(b.t=='hut'&&(S==3||night)?.6:0)))
     addP((b.x+(b.t=='camp'?.5:.75))*T,(b.y+(b.t=='camp'?.6:0))*T,rnd(-3,3),-14,2,'#aaa',2.5);
   const vw=VW/z;
@@ -593,58 +594,53 @@ function renderFog(){
 // ===== رندر =====
 const gcol=sh=>{const c=GC[S],k=(sh-.5)*22;return`rgb(${c[0]+k|0},${c[1]+k|0},${c[2]+k|0})`};
 
-function rebuildTerrain(){
-  const c=terrainCtx;
-  if(!c)return;
-  c.clearRect(0,0,W*T,H*T);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const px=x*T,py=y*T,t=M[y][x],sh=SH[y][x];
-    if(t==4){
-      c.fillStyle=S==3?'#a9d4ec':'#3b8fd0';
-      c.fillRect(px,py,T,T);
-      c.strokeStyle='rgba(255,255,255,.35)';
-      c.beginPath();
-      const w=Math.sin(x*.8+y*.5+tm*.05)*2;
-      c.moveTo(px+3,py+12+w);c.quadraticCurveTo(px+8,py+8,px+13,py+12+w);c.stroke();
-      continue;
-    }
-    if(t==5){
-      c.fillStyle=`rgb(${120+sh*30|0},${112+sh*28|0},${104+sh*25|0})`;
-      c.fillRect(px,py,T,T);
-      c.fillStyle='#8a8176';
-      c.beginPath();c.moveTo(px-2,py+T);c.lineTo(px+12,py-6);c.lineTo(px+T+2,py+T);c.fill();
-      c.fillStyle='#fff';
-      c.beginPath();c.moveTo(px+8,py+2);c.lineTo(px+12,py-6);c.lineTo(px+16,py+2);c.lineTo(px+12,py);c.fill();
-      c.fillStyle='rgba(0,0,0,.15)';
-      c.beginPath();c.moveTo(px+12,py-6);c.lineTo(px+T+2,py+T);c.lineTo(px+12,py+T);c.fill();
-      continue;
-    }
-    c.fillStyle=RD[y][x]?`rgb(${176+sh*14|0},${150+sh*12|0},${104+sh*10|0})`:gcol(sh);
-    c.fillRect(px,py,T,T);
-    if(RD[y][x]){
-      c.fillStyle='rgba(90,70,40,.35)';
-      c.fillRect(px+4+sh*10,py+6,2,2);c.fillRect(px+14,py+4+sh*12,2,2);
-    }
-    if(t==1){
-      c.fillStyle='rgba(0,0,0,.18)';
-      c.beginPath();c.ellipse(px+12,py+21,8*(.85+sh*.4),3,0,0,7);c.fill();
-      c.fillStyle='#5a3a1a';c.fillRect(px+10.5,py+12,3,10);
-      const col=[['#4caf50','#66bb6a'],['#2e7d32','#43a047'],['#c7842a','#e0a040'],['#e8f0f0','#fff']][S];
-      c.fillStyle=col[0];c.beginPath();c.arc(px+12,py+9,9*(.85+sh*.4),0,7);c.fill();
-      c.fillStyle=col[1];c.beginPath();c.arc(px+10,py+6,5.5*(.85+sh*.4),0,7);c.fill();
-    }else if(t==2){
-      c.fillStyle='#8a8a8a';c.beginPath();c.arc(px+12,py+14,8,0,7);c.fill();
-      c.fillStyle='#b0b0b0';c.beginPath();c.arc(px+9,py+11,4,0,7);c.fill();
-    }else if(t==3){
-      c.fillStyle='#2f8f3a';c.beginPath();c.arc(px+12,py+13,8,0,7);c.fill();
-      c.fillStyle='#d12c4b';
-      for(const[a,b]of[[8,10],[15,12],[11,17]]){c.beginPath();c.arc(px+a,py+b,2.2,0,7);c.fill()}
+function drawTile(x,y){
+  const px=x*T,py=y*T,t=M[y][x],sh=SH[y][x];
+  if(t==4){
+    g.fillStyle=S==3?'#a9d4ec':'#3b8fd0';g.fillRect(px,py,T,T);
+    g.strokeStyle='rgba(255,255,255,.35)';g.lineWidth=1;
+    const w=Math.sin(tm*2+x*.8+y*.5)*2;
+    g.beginPath();g.moveTo(px+3,py+12+w);
+    g.quadraticCurveTo(px+T/2,py+8,px+T-3,py+12+w);g.stroke();
+    return;
+  }
+  if(t==5){
+    g.fillStyle=`rgb(${120+sh*30|0},${112+sh*28|0},${104+sh*25|0})`;
+    g.fillRect(px,py,T,T);
+    g.fillStyle='#8a8176';
+    g.beginPath();g.moveTo(px-1,py+T);g.lineTo(px+T/2,py-4);g.lineTo(px+T+1,py+T);g.fill();
+    g.fillStyle='#fff';
+    g.beginPath();g.moveTo(px+T/2-4,py+2);g.lineTo(px+T/2,py-4);g.lineTo(px+T/2+4,py+2);g.lineTo(px+T/2,py+1);g.fill();
+    return;
+  }
+  g.fillStyle=RD[y][x]
+    ?`rgb(${176+sh*14|0},${150+sh*12|0},${104+sh*10|0})`
+    :gcol(sh);
+  g.fillRect(px,py,T,T);
+  if(RD[y][x]){
+    g.fillStyle='rgba(90,70,40,.35)';
+    g.fillRect(px+4+sh*10,py+6,2,2);g.fillRect(px+14,py+4+sh*12,2,2);
+  }
+  if(t==1){
+    g.fillStyle='rgba(0,0,0,.2)';
+    g.beginPath();g.ellipse(px+T/2,py+T*0.9,T*0.3,2,0,0,7);g.fill();
+    g.fillStyle='#5a3a1a';g.fillRect(px+T/2-1,py+T*0.5,2,T*0.4);
+    const col=[['#4caf50','#66bb6a'],['#2e7d32','#43a047'],['#c7842a','#e0a040'],['#e8f0f0','#fff']][S];
+    g.fillStyle=col[0];g.beginPath();g.arc(px+T/2,py+T*0.4,T*0.38,0,7);g.fill();
+    g.fillStyle=col[1];g.beginPath();g.arc(px+T*0.4,py+T*0.25,T*0.22,0,7);g.fill();
+  }else if(t==2){
+    g.fillStyle='#8a8a8a';g.beginPath();g.arc(px+T/2,py+T*0.6,T*0.32,0,7);g.fill();
+    g.fillStyle='#b0b0b0';g.beginPath();g.arc(px+T*0.4,py+T*0.45,T*0.15,0,7);g.fill();
+  }else if(t==3){
+    g.fillStyle='#2f8f3a';g.beginPath();g.arc(px+T/2,py+T*0.55,T*0.32,0,7);g.fill();
+    g.fillStyle='#d12c4b';
+    for(const[a,b]of[[0.35,0.4],[0.65,0.5],[0.45,0.7]]){
+      g.beginPath();g.arc(px+T*a,py+T*b,2,0,7);g.fill();
     }
   }
-  terrainDirty=false;lastSeason=S;
 }
 
-// ==== آیکون ساختمان‌ها ====
+// ==== ساختمان‌ها ====
 function dHut(px,py,b){const f=b.lv,bx=px+3;let y=py+22;
   for(let i=0;i<f;i++){y-=8;
     g.fillStyle=i%2?'#d9c9a3':'#e6d8b5';g.fillRect(bx,y,18,8);
@@ -776,28 +772,23 @@ const DR={hut:dHut,farm:dFarm,store:dStore,mine:dMine,castle:dCastle,camp:dCamp,
 function draw(){
   g.setTransform(1,0,0,1,0,0);
   g.fillStyle='#0a0e08';g.fillRect(0,0,VW,VH);
-  if(terrainDirty||S!=lastSeason)rebuildTerrain();
 
   g.setTransform(z,0,0,z,-cam.x*z,-cam.y*z);
-  // terrain
-  const sx=clamp(cam.x,0,W*T-1),sy=clamp(cam.y,0,H*T-1);
-  const sw=Math.min(VW/z,W*T-sx),sh=Math.min(VH/z,H*T-sy);
-  if(sw>0&&sh>0)
-    g.drawImage(terrainCanvas,sx,sy,sw,sh,sx,sy,sw,sh);
 
-  // fog
+  // تایل‌ها مستقیم (بدون pre-render)
+  const tx0=Math.max(0,Math.floor(cam.x/T));
+  const ty0=Math.max(0,Math.floor(cam.y/T));
+  const tx1=Math.min(W,Math.ceil((cam.x+VW/z)/T)+1);
+  const ty1=Math.min(H,Math.ceil((cam.y+VH/z)/T)+1);
+  for(let y=ty0;y<ty1;y++)for(let x=tx0;x<tx1;x++)drawTile(x,y);
+
+  // فرگ
   g.save();
   g.imageSmoothingEnabled=false;
-  g.globalAlpha=1;
-  const zz=z, cx=cam.x, cy=cam.y;
-  g.setTransform(1,0,0,1,0,0);
-  const fx=(cx/T),fy=(cy/T),fw=(VW/zz/T),fh=(VH/zz/T);
-  g.drawImage(fogCanvas,fx,fy,fw,fh,0,0,VW,VH);
-  g.setTransform(zz,0,0,zz,-cx*zz,-cy*zz);
-  g.imageSmoothingEnabled=true;
+  g.drawImage(fogCanvas,0,0,W,H,0,0,W*T,H*T);
   g.restore();
 
-  // مرز قلمرو
+  // مرز
   g.strokeStyle='#ffd54f';g.setLineDash([8,6]);g.lineWidth=2;
   g.strokeRect(TR.x0*T,TR.y0*T,(TR.x1-TR.x0)*T,(TR.y1-TR.y0)*T);
   g.setLineDash([]);g.lineWidth=1;
@@ -850,14 +841,14 @@ function draw(){
   }
   g.globalAlpha=1;
 
-  // ghost preview
+  // ghost
   if(tool&&hov&&tool!='road'){
     const[hx,hy]=hov,ok=canPlace(tool,hx,hy);
     g.fillStyle=ok?'rgba(80,255,80,.35)':'rgba(255,60,60,.35)';
     g.fillRect(hx*T,hy*T,T,T);
   }
 
-  // شب و نور
+  // شب
   g.setTransform(1,0,0,1,0,0);
   if(nd>0){
     g.fillStyle=`rgba(8,14,50,${nd})`;g.fillRect(0,0,VW,VH);
@@ -939,7 +930,7 @@ function click(x,y){
 function paintRoad(e){
   const[x,y]=tile(e);
   if(x>=0&&y>=0&&x<W&&y<H&&inT(x,y)&&M[y][x]==0&&!BG[y][x]&&!RD[y][x]&&R.wood>=1){
-    RD[y][x]=1;R.wood--;terrainDirty=true;
+    RD[y][x]=1;R.wood--;
   }
 }
 const pos=e=>{const r=cv.getBoundingClientRect();return{sx:(e.clientX-r.left)/r.width*VW,sy:(e.clientY-r.top)/r.height*VH}};
@@ -955,7 +946,7 @@ function zoom(f,cx0,cy0){
 }
 
 cv.addEventListener('pointerdown',e=>{
-  cv.setPointerCapture(e.pointerId);
+  try{cv.setPointerCapture(e.pointerId)}catch(_){}
   if(e.pointerType=='touch'){
     if(!pinch)pinch={ids:[e.pointerId],d:0,x:e.clientX,y:e.clientY};
     else if(pinch.ids.length==1)pinch.ids.push(e.pointerId);
@@ -1083,7 +1074,7 @@ $('dm').onclick=()=>{
   for(const k in r)R[k]=Math.min(capR(),R[k]+r[k]);
   BG[b.y][b.x]=null;
   const i=B.indexOf(b);if(i>=0)B.splice(i,1);
-  terrainDirty=true;selB=null;
+  selB=null;
   msg('🗑 تخریب شد، نصف منابع برگشت');
 };
 document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
@@ -1114,8 +1105,8 @@ function ui(){
   $('ses').textContent=(night?'🌙 ':'☀️ ')+SEAS[S]+' — سال '+fa(Math.floor(tm/180)+1);
   $('rs').textContent=`🍖${fa(R.food)} 🪵${fa(R.wood)} 🪨${fa(R.stone)} 💰${fa(R.gold)} 🪚${fa(R.lumber)} 🍞${fa(R.bread)}`;
   $('pop').textContent=`👥 ${fa(P)}/${fa(cap())}`+(e<4?` (بعدی: ${fa(EP[e+1])}${e==3?' + قلعه':''})`:'');
-  const hb=$('hb');hb.firstChild.style.width=happy+'%';
-  hb.classList.toggle('low',happy<35);hb.classList.toggle('mid',happy>=35&&happy<60);
+  const hb=$('hb');if(hb&&hb.firstChild){hb.firstChild.style.width=happy+'%';
+    hb.classList.toggle('low',happy<35);hb.classList.toggle('mid',happy>=35&&happy<60);}
   for(const k in JOBS){
     const el=$('j_'+k);if(el)el.textContent=J[k];
   }
@@ -1145,14 +1136,11 @@ function loop(t){
     const dt=Math.min(.05,(t-last)/1000||0);last=t;
     for(let i=0;i<spd;i++)upd(dt);
     draw();ui();
-  }catch(e){console.error("Loop Error:",e);}
+  }catch(e){window.onerror(e.message,'',e.lineNumber||0)}
   requestAnimationFrame(loop);
 }
 
 // ==== شروع ====
-terrainCanvas=document.createElement('canvas');
-terrainCanvas.width=W*T;terrainCanvas.height=H*T;
-terrainCtx=terrainCanvas.getContext('2d');
 fogCanvas=document.createElement('canvas');
 fogCanvas.width=W;fogCanvas.height=H;
 fogCtx=fogCanvas.getContext('2d');
