@@ -80,9 +80,9 @@ button:disabled{opacity:.4;cursor:not-allowed}
 'use strict';
 
 // نمایش خطا در صفحه
-window.onerror=function(msg,url,line,col,err){
+window.onerror=function(errMsg,url,line,col,err){
   const el=document.getElementById('err');
-  if(el){el.style.display='block';el.textContent='خطا: '+msg+' (خط '+line+')';}
+  if(el){el.style.display='block';el.textContent='خطا: '+errMsg+' (خط '+line+')';}
   return false;
 };
 
@@ -90,6 +90,7 @@ const $=i=>document.getElementById(i);
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const fa=n=>Math.round(Number(n)||0).toLocaleString('fa-IR');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const msg=t=>$('msg').textContent=t;  // ← این خط جا افتاده بود!
 
 // ===== ثابت‌ها =====
 const T=24,W=192,H=128,VW=960,VH=600;
@@ -775,25 +776,21 @@ function draw(){
 
   g.setTransform(z,0,0,z,-cam.x*z,-cam.y*z);
 
-  // تایل‌ها مستقیم (بدون pre-render)
   const tx0=Math.max(0,Math.floor(cam.x/T));
   const ty0=Math.max(0,Math.floor(cam.y/T));
   const tx1=Math.min(W,Math.ceil((cam.x+VW/z)/T)+1);
   const ty1=Math.min(H,Math.ceil((cam.y+VH/z)/T)+1);
   for(let y=ty0;y<ty1;y++)for(let x=tx0;x<tx1;x++)drawTile(x,y);
 
-  // فرگ
   g.save();
   g.imageSmoothingEnabled=false;
   g.drawImage(fogCanvas,0,0,W,H,0,0,W*T,H*T);
   g.restore();
 
-  // مرز
   g.strokeStyle='#ffd54f';g.setLineDash([8,6]);g.lineWidth=2;
   g.strokeRect(TR.x0*T,TR.y0*T,(TR.x1-TR.x0)*T,(TR.y1-TR.y0)*T);
   g.setLineDash([]);g.lineWidth=1;
 
-  // ساختمان‌ها
   for(const b of [...B].sort((a,c)=>a.y-c.y)){
     const px=b.x*T,py=b.y*T,wip=!b.done;
     g.globalAlpha=wip?.5:1;
@@ -808,7 +805,6 @@ function draw(){
     if(b==selB){g.strokeStyle='#fff';g.lineWidth=2;g.strokeRect(px,py,T,T);g.lineWidth=1}
   }
 
-  // villagers
   for(const v of [...V].sort((a,c)=>a.y-c.y)){
     const px=v.x*T,py=v.y*T,bob=v.mov?Math.abs(Math.sin(v.ph))*1.5:0,lg=v.mov?Math.sin(v.ph)*2:0;
     g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(px,py+8,5,2,0,0,7);g.fill();
@@ -822,7 +818,6 @@ function draw(){
       g.fillRect(px+3,py-2-bob,4,4)}
   }
 
-  // wolves
   for(const w of wolves){
     const px=w.x*T,py=w.y*T;
     g.fillStyle='rgba(0,0,0,.3)';g.beginPath();g.ellipse(px,py+8,7,2.5,0,0,7);g.fill();
@@ -834,21 +829,18 @@ function draw(){
     g.fillStyle='#e74c3c';g.fillRect(px-6,py-12,12*Math.max(0,w.hp/40),2);
   }
 
-  // particles
   for(const q of Q){
     g.globalAlpha=Math.max(0,q.l/q.m);g.fillStyle=q.c;
     g.beginPath();g.arc(q.x,q.y,q.s,0,7);g.fill();
   }
   g.globalAlpha=1;
 
-  // ghost
   if(tool&&hov&&tool!='road'){
     const[hx,hy]=hov,ok=canPlace(tool,hx,hy);
     g.fillStyle=ok?'rgba(80,255,80,.35)':'rgba(255,60,60,.35)';
     g.fillRect(hx*T,hy*T,T,T);
   }
 
-  // شب
   g.setTransform(1,0,0,1,0,0);
   if(nd>0){
     g.fillStyle=`rgba(8,14,50,${nd})`;g.fillRect(0,0,VW,VH);
