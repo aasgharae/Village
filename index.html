@@ -32,6 +32,8 @@ button:disabled{opacity:.4;cursor:not-allowed}
 #hb.low>i{background:var(--bad)}
 .techrow{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px dashed var(--bd)}
 .small{font-size:11px;opacity:.75}
+#alert{display:none;background:var(--bad);color:#fff;padding:6px 10px;border-radius:6px;margin-bottom:6px;font-weight:bold}
+#tribes .techrow{display:block;padding:6px 0}
 </style></head><body>
 
 <div id="err"></div>
@@ -51,6 +53,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 </div>
 
 <div id="msg">در حال بارگذاری…</div>
+<div id="alert"></div>
 
 <div class="p" id="sp" style="display:none">
   <div class="row"><span id="sn"></span><button id="ub"></button></div>
@@ -63,6 +66,8 @@ button:disabled{opacity:.4;cursor:not-allowed}
 
 <div class="p"><b>شغل‌ها</b> <button id="au" class="on">خودکار: روشن</button>
 <div class="jgrid" id="jobs"></div></div>
+
+<div class="p"><b>قبایل</b> <span class="small" id="def"></span><div id="tribes"></div></div>
 
 <div class="p"><b>فناوری</b><div id="tech"></div></div>
 
@@ -107,7 +112,7 @@ const COST={
 const NEED={camp:1,hut:4,farm:5,store:7,mine:6,lumber_mill:8,mill:9,bakery:8,market:8,well:5,tower:14,barracks:20,castle:40};
 const NAME={camp:'آتشگاه',hut:'خانه',farm:'مزرعه',store:'انبار',mine:'معدن',lumber_mill:'چوب‌بری',mill:'آسیاب',bakery:'نانوایی',market:'بازار',well:'چاه',tower:'برج',barracks:'سربازخانه',castle:'قلعه',road:'جاده'};
 const ICON={camp:'🔥',hut:'🏠',farm:'🌾',store:'📦',mine:'⛏️',lumber_mill:'🪚',mill:'⚙️',bakery:'🍞',market:'🏪',well:'💧',tower:'🗼',barracks:'⚔️',castle:'🏰',road:'🛤️'};
-const UNL={hut:0,farm:0,lumber_mill:0,well:0,store:1,mine:1,mill:1,bakery:1,market:1,tower:2,barracks:2,castle:3};
+const UNL={hut:0,farm:0,lumber_mill:0,well:0,store:1,mine:1,mill:1,bakery:1,market:1,tower:2,barracks:1,castle:3};
 const ERA=['قبیله','روستا','شهرک','شهر','کشور'];
 const EP=[0,30,120,350,1000];
 const SEAS=['بهار','تابستان','پاییز','زمستان'];
@@ -134,7 +139,9 @@ const HC=[8,20,45];
 const TECHS={
   iron:{name:'🔨 ابزار آهنی',cost:{gold:80},desc:'ساخت +۳۰٪'},
   irrig:{name:'💧 آبیاری',cost:{gold:70},desc:'مزرعه +۳۰٪'},
-  mining:{name:'⛏️ استخراج',cost:{gold:70},desc:'معدن +۳۰٪'}
+  mining:{name:'⛏️ استخراج',cost:{gold:70},desc:'معدن +۳۰٪'},
+  weapons:{name:'⚔️ سلاح آهنی',cost:{gold:90},desc:'نگهبان‌ها +۳۰٪ قوی‌تر'},
+  walls:{name:'🧱 دیوار دفاعی',cost:{gold:110},desc:'ساختمون‌ها در حمله ۵۰٪ مقاوم‌تر'}
 };
 
 // ===== وضعیت =====
@@ -164,6 +171,7 @@ function init(){
     const t=i%2?1:3;if(M[y][x]==0){M[y][x]=t;RS[y][x]=5}
   }
   R={food:40,wood:30,stone:0,gold:10,lumber:0,flour:0,bread:0};
+  initTribes();barMsg=false;warnT=0;
   P=5;B=[];const c={t:'camp',x:Math.floor(W/2),y:Math.floor(H/2),lv:1,done:true,p:0,up:false};B.push(c);BG[c.y][c.x]=c;
   TR={x0:W/2-20,y0:H/2-16,x1:W/2+20,y1:H/2+16};
   ex=0;J={wood:2,stone:0,food:2,farm:0,mine:0,lumber:0,mill:0,bake:0,build:1,scout:0,guard:0};
@@ -172,7 +180,7 @@ function init(){
   tool=null;selB=null;tm=0;S=0;night=false;nd=0;spT=stT=rgT=lsT=fgT=auT=0;won=false;eraI=0;Q=[];
   wolves=[];happy=60;nextWolfT=90;nextEventT=90;recentFamine=false;techUnlocked={};
   fog=new Uint8Array(W*H).fill(2);
-  buildUI();updateTechUI();
+  buildUI();updateTechUI();buildTribeUI();
   msg('قبیلت شروع شد. چوب جمع کن، خانه بساز، جاده بکش، مراقب گرگ‌ها باش!');
   auto();
 }
@@ -191,12 +199,12 @@ const SAVE_KEY='khak_taj_v2';
 function save(){
   try{
     const d={
-      v:2,
+      v:3,
       M:M.map(r=>r.join('')),RS:RS.map(r=>r.join('')),
-      RD:RD.map(r=>r.join('')),SH:SH.map(r=>r.join('')),
+      RD:RD.map(r=>r.join('')),SH:SH.map(r=>r.map(x=>Math.min(9,Math.floor(x*10))).join('')),TB:JSON.parse(JSON.stringify(TB)),
       R,P,B:JSON.parse(JSON.stringify(B)),J,tm,TR,ex,spd,autoOn,
       tech:techUnlocked,happy,won,eraI,
-      V:V.map(v=>({x:v.x,y:v.y,job:v.job}))
+      V:V.map(v=>({x:v.x,y:v.y,job:v.job,f:v.f}))
     };
     localStorage.setItem(SAVE_KEY,JSON.stringify(d));
     msg('💾 بازی ذخیره شد');
@@ -208,19 +216,20 @@ function load(){
   if(!s){msg('ذخیره‌ای پیدا نشد');return false}
   try{
     const d=JSON.parse(s);
-    M=d.M.map(r=>r.split('').map(Number));
-    RS=d.RS.map(r=>r.split('').map(Number));
-    RD=d.RD.map(r=>r.split('').map(Number));
-    SH=d.SH.map(r=>r.split('').map(Number));
+    const nM=d.M.map(r=>r.split('').map(Number)),nRS=d.RS.map(r=>r.split('').map(Number)),nRD=d.RD.map(r=>r.split('').map(Number));
+    if(nM.length!=H||nM.some(r=>r.length!=W||r.some(isNaN)))throw new Error('ذخیره‌ی خراب یا قدیمی');
+    M=nM;RS=nRS;RD=nRD;
+    SH=(d.v>=3)?d.SH.map(r=>r.split('').map(c=>(+c+.5)/10)):Array.from({length:H},()=>Array.from({length:W},Math.random));
     R=d.R;P=d.P;B=d.B;J=d.J;tm=d.tm;TR=d.TR;ex=d.ex;spd=d.spd;autoOn=d.autoOn;
     techUnlocked=d.tech||{};happy=d.happy||60;won=d.won||false;eraI=d.eraI||0;
     fog=new Uint8Array(W*H).fill(2);
     BG=[];for(let y=0;y<H;y++)BG.push(Array(W).fill(null));
     for(const b of B)BG[b.y][b.x]=b;
-    V=(d.V||[]).map(v=>({...nv(),x:v.x,y:v.y,job:v.job}));
+    TB=d.TB||[];if(!TB.length)initTribes();raiders=[];barMsg=barracksOK();warnT=0;
+    V=(d.V||[]).filter(v=>isFinite(v.x)&&isFinite(v.y)).map((v,i)=>({...nv(),x:v.x,y:v.y,job:v.job,f:v.f!=null?v.f:i%2==1}));if(!V.length)syncU();
     z=0.85;cam={x:W*T/2-VW/z/2,y:H*T/2-VH/z/2};
     wolves=[];nextWolfT=90;nextEventT=90;recentFamine=false;
-    buildUI();updateTechUI();
+    buildUI();updateTechUI();buildTribeUI();
     document.querySelectorAll('[data-s]').forEach(x=>x.classList.toggle('on',+x.dataset.s==spd));
     msg('📂 بازی بارگذاری شد');
     return true;
@@ -228,10 +237,10 @@ function load(){
 }
 
 // ===== villagers =====
-const nv=()=>({x:W/2+rnd(-1,1),y:H/2+rnd(-1,1),job:null,st:'seek',t:0,carry:0,ct:'food',ph:0,mov:false,hp:100,mx:100});
+const nv=()=>({f:Math.random()<.5,x:W/2+rnd(-1,1),y:H/2+rnd(-1,1),job:null,st:'seek',t:0,carry:0,ct:'food',ph:0,mov:false,hp:100,mx:100});
 function syncU(){
   const n=Math.min(P,80);
-  while(V.length<n)V.push(nv());
+  while(V.length<n){const u=nv();u.f=V.length%2==1;V.push(u)}
   while(V.length>n)V.pop();
   assign();
 }
@@ -248,12 +257,13 @@ function auto(){
   J.lumber=Math.min(cnt('lumber_mill')*2,Math.floor(n*.12));
   J.mill=Math.min(cnt('mill')*2,Math.floor(n*.1));
   J.bake=Math.min(cnt('bakery')*2,Math.floor(n*.1));
-  J.guard=Math.min(cnt('tower')+cnt('barracks')*2,Math.floor(n*.15));
+  J.guard=Math.min(cnt('tower')+cnt('barracks')*3,Math.floor(n*.2));
   J.scout=0;
   J.build=Math.min(Math.max(1,bs*2),Math.ceil(n*.2));
   const r=Math.max(0,n-J.farm-J.mine-J.lumber-J.mill-J.bake-J.guard-J.scout-J.build);
-  J.food=Math.max(1,Math.round(r*.3));
-  J.wood=Math.max(1,Math.round(r*.5));
+  const lowF=R.food<P*4;
+  J.food=Math.max(1,Math.round(r*(lowF?.5:.3)));
+  J.wood=Math.max(1,Math.round(r*(lowF?.35:.5)));
   J.stone=Math.max(0,r-J.food-J.wood);
   assign();
 }
@@ -327,6 +337,7 @@ function step(v,dt){
     const dx=v.x-wolf.x,dy=v.y-wolf.y,d=Math.hypot(dx,dy)||1;
     mv(v.x+dx/d*2,v.y+dy/d*2);return;
   }
+  if(v.job=='guard'){const en=nearW(v,14);if(en){mv(en.x,en.y);return}}
   if(!v.job){wander();return}
   if(v.st=='seek'){v.tg=find(v);v.t=0;v.st=v.tg?'go':'idle';return}
   if(v.st=='idle'){wander();v.t+=dt;if(v.t>1.5)v.st='seek';return}
@@ -407,6 +418,7 @@ function spawnWolf(){
 function nearW(v,r){
   let best=null,bd=r*r;
   for(const w of wolves){const d=(w.x-v.x)**2+(w.y-v.y)**2;if(d<bd){bd=d;best=w}}
+  for(const w of raiders){const d=(w.x-v.x)**2+(w.y-v.y)**2;if(d<bd){bd=d;best=w}}
   return best;
 }
 function updateWolves(dt){
@@ -461,6 +473,152 @@ function updateWolves(dt){
   }
 }
 
+
+// ===== قبایل =====
+let TB=[],raiders=[],barMsg=false,warnT=0;
+const TDEF=[['بنی‌سرخ','#d9534f'],['تیره‌ی کوهستان','#8e24aa'],['قبیله‌ی دشت‌سبز','#2e8bd9'],['اهالی رود','#17a2b8']];
+function initTribes(){
+  const sp=[[30,24],[W-30,24],[30,H-24],[W-30,H-24]].sort(()=>Math.random()-.5);
+  const rels=['enemy','enemy','friend','friend'].sort(()=>Math.random()-.5);
+  TB=TDEF.map((d,i)=>{
+    const x=Math.round(sp[i][0]+rnd(-6,6)),y=Math.round(sp[i][1]+rnd(-5,5));
+    for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){const yy=y+dy,xx=x+dx;
+      if(yy>=0&&xx>=0&&yy<H&&xx<W&&!BG[yy][xx]){M[yy][xx]=0;RS[yy][xx]=0}}
+    return{n:d[0],c:d[1],rel:rels[i],x,y,pop:Math.round(rnd(22,32)),att:rels[i]=='friend'?30:0,raidT:rnd(150,230),truce:0,ally:false};
+  });
+  raiders=[];
+}
+const barracksOK=()=>B.some(b=>b.t=='barracks'&&b.done);
+function guardMul(){return 1+B.filter(b=>b.done&&b.t=='barracks').reduce((s,b)=>s+.25*b.lv,0)+(techUnlocked.weapons?.3:0)}
+function defPower(){
+  let p=0;for(const b of B)if(b.done&&b.t=='tower')p+=30*b.lv;
+  const m=guardMul();for(const v of V)if(v.job=='guard')p+=18*m;
+  p+=TB.filter(t=>t.ally&&t.rel=='friend').length*40;
+  return Math.round(p);
+}
+const tStr=t=>Math.round(t.pop*1.3);
+const tribute=()=>40+era()*25;
+function launchRaid(t){
+  let n=clamp(Math.round(t.pop/7),3,30);
+  n=Math.max(2,Math.round(n*(1-.15*TB.filter(x=>x.ally&&x.rel=='friend').length)));
+  for(let i=0;i<n;i++)raiders.push({x:t.x+rnd(-2,2),y:t.y+rnd(-2,2),hp:50+era()*6,tr:t,age:0,cd:0,ph:rnd(0,6),mov:true});
+  t.raidT=rnd(170,260);
+  msg('⚠️ '+t.n+' با '+fa(n)+' سرباز داره میاد سمتت! دفاع کن یا باج بده');
+}
+function calmTribe(t){for(let i=raiders.length-1;i>=0;i--)if(raiders[i].tr==t)raiders.splice(i,1)}
+function updateTribes(dt){
+  if(barracksOK()&&!barMsg){barMsg=true;msg('⚔️ سربازخانه داری؛ از حالا دشمن‌ها ممکنه حمله کنن. برج و نگهبان آماده کن')}
+  for(const t of TB){
+    t.pop=Math.min(220,t.pop+dt*(.03+era()*.01));
+    t.truce=Math.max(0,t.truce-dt);
+    if(t.rel=='enemy'&&barMsg&&t.truce<=0&&!raiders.some(r=>r.tr==t)){
+      t.raidT-=dt;if(t.raidT<=0)launchRaid(t);
+    }
+  }
+}
+function updateRaiders(dt){
+  const gm=guardMul();
+  for(let i=raiders.length-1;i>=0;i--){
+    const r=raiders[i];r.age+=dt;
+    if(r.age>160||!V.length){raiders.splice(i,1);continue}
+    let tg=null,bd=36;
+    for(const v of V){const d=(v.x-r.x)**2+(v.y-r.y)**2;if(d<bd){bd=d;tg={x:v.x,y:v.y,v}}}
+    if(!tg){let b2=1e9;for(const b of B){const d=(b.x+.5-r.x)**2+(b.y+.5-r.y)**2;if(d<b2){b2=d;tg={x:b.x+.5,y:b.y+.5,b}}}}
+    r.mov=false;
+    if(tg){
+      const dx=tg.x-r.x,dy=tg.y-r.y,d=Math.hypot(dx,dy)||1;
+      if(d>1){
+        const sp=1.7*dt,nx=r.x+dx/d*sp,ny=r.y+dy/d*sp;r.mov=true;r.ph+=dt*9;
+        if(!wat(nx,ny)){r.x=nx;r.y=ny}else if(!wat(nx,r.y))r.x=nx;else if(!wat(r.x,ny))r.y=ny;
+      }else{
+        r.cd-=dt;
+        if(r.cd<=0){
+          r.cd=1;
+          if(tg.v){
+            const v=tg.v;v.hp-=v.job=='guard'?7:14;
+            addP(v.x*T,v.y*T,rnd(-8,8),-18,.6,'#c0392b',2);
+            if(v.hp<=0){const k=V.indexOf(v);if(k>=0)V.splice(k,1);P=Math.max(1,P-1);msg('💀 یه نفر توسط مهاجمین کشته شد')}
+          }else if(tg.b){
+            const b=tg.b;
+            if(b.t=='camp'){for(const k of['food','wood','gold'])R[k]=Math.max(0,R[k]*.97)}
+            else{
+              if(b.hp==null)b.hp=60+40*b.lv;
+              b.hp-=10*(techUnlocked.walls?.5:1);
+              addP((b.x+.5)*T,(b.y+.5)*T,rnd(-10,10),-20,.5,'#ff9800',2);
+              if(b.hp<=0){b.hp=null;b.done=false;b.p=0;b.up=false;
+                for(const k of['food','wood','stone','gold'])R[k]=Math.floor(R[k]*.88);
+                msg('🔥 '+NAME[b.t]+' غارت شد و از کار افتاد! دوباره بسازش')}
+            }
+          }
+        }
+      }
+    }
+    for(const b of B)if(b.done&&b.t=='tower'&&Math.hypot(b.x-r.x,b.y-r.y)<9){
+      r.hp-=dt*14*b.lv;
+      if(Math.random()<dt*3)addP(b.x*T+12,b.y*T,rnd(-4,4),rnd(-20,-5),.5,'#ffe066',1.5);
+    }
+    for(const v of V)if(v.job=='guard'&&Math.hypot(v.x-r.x,v.y-r.y)<2)r.hp-=dt*20*gm;
+    if(r.hp<=0){
+      raiders.splice(i,1);R.gold=Math.min(capR(),R.gold+2);
+      if(!raiders.some(x=>x.tr==r.tr)){r.tr.pop=Math.max(10,r.tr.pop-6);r.tr.raidT+=60;msg('🛡️ حمله‌ی '+r.tr.n+' دفع شد!')}
+    }
+  }
+}
+function buildTribeUI(){
+  const el=$('tribes');el.innerHTML='';
+  TB.forEach((t,i)=>{
+    const d=document.createElement('div');d.className='techrow';
+    const acts=t.rel=='friend'
+      ?`<button data-ta="${i}" data-act="sell">⚖️ ۵۰ چوب ← ۲۲ طلا</button><button data-ta="${i}" data-act="buy">🛒 ۳۰ طلا ← ۸۰ غذا</button><button data-ta="${i}" data-act="ally" id="ta_${i}">🛡️ پیمان دفاعی (۶۰ طلا)</button>`
+      :`<button data-ta="${i}" data-act="tribute" id="tt_${i}"></button><button data-ta="${i}" data-act="peace">🕊️ صلح (۱۵۰ طلا)</button>`;
+    d.innerHTML=`<div><b style="color:${t.c}">● ${t.n}</b> <span class="small" id="ts_${i}"></span></div><div class="bb">${acts}</div>`;
+    el.appendChild(d);
+  });
+}
+$('tribes').addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b||b.disabled)return;
+  const t=TB[+b.dataset.ta],a=b.dataset.act;if(!t)return;
+  if(a=='sell'){if(R.wood<50)return msg('چوب کم داری');R.wood-=50;R.gold=Math.min(capR(),R.gold+22);t.att=Math.min(100,t.att+4);msg('🤝 تجارت با '+t.n+' انجام شد')}
+  else if(a=='buy'){if(R.gold<30)return msg('طلا کم داری');R.gold-=30;R.food=Math.min(capR(),R.food+80);t.att=Math.min(100,t.att+4);msg('🛒 ۸۰ غذا خریدی')}
+  else if(a=='ally'){if(t.ally)return;if(t.att<50)return msg('اول بیشتر تجارت کن (دوستی باید ≥ ۵۰ باشه)');if(R.gold<60)return msg('طلا کم داری');R.gold-=60;t.ally=true;msg('🛡️ پیمان دفاعی با '+t.n+' بسته شد؛ حمله‌ها کوچیک‌تر میشن')}
+  else if(a=='tribute'){const c=tribute();if(R.gold<c)return msg('طلا کم داری ('+fa(c)+')');R.gold-=c;t.truce=170;t.raidT=Math.max(t.raidT,170);calmTribe(t);msg('💰 باج دادی؛ '+t.n+' تا مدتی حمله نمیکنه')}
+  else if(a=='peace'){if(R.gold<150)return msg('طلا کم داری (۱۵۰)');if(defPower()<tStr(t)*.8)return msg('🗡️ دفاعت ('+fa(defPower())+') از '+t.n+' ('+fa(tStr(t))+') کمتره؛ صلح رو قبول نمیکنن');R.gold-=150;calmTribe(t);t.rel='friend';t.att=40;t.ally=false;buildTribeUI();msg('🕊️ با '+t.n+' صلح شد؛ حالا دوستتونن')}
+});
+function drawTribes(){
+  for(const t of TB){
+    const px=t.x*T,py=t.y*T;
+    g.fillStyle='rgba(0,0,0,.2)';g.beginPath();g.ellipse(px+12,py+22,42,14,0,0,7);g.fill();
+    const tent=(ox,oy,s)=>{g.fillStyle=t.c;g.beginPath();g.moveTo(px+ox-9*s,py+oy+8*s);g.lineTo(px+ox,py+oy-9*s);g.lineTo(px+ox+9*s,py+oy+8*s);g.fill();g.fillStyle='rgba(0,0,0,.35)';g.fillRect(px+ox-2*s,py+oy+s,4*s,7*s)};
+    tent(-14,10,1.1);tent(36,8,1);tent(12,-8,1.2);
+    const f=Math.sin(tm*14);g.fillStyle='#ff9800';g.beginPath();g.arc(px+12,py+20,3.5+f*.4,0,7);g.fill();
+    g.fillStyle='#ffeb3b';g.beginPath();g.arc(px+12,py+20,1.8,0,7);g.fill();
+    g.fillStyle='#5d4037';g.fillRect(px+10.5,py-32,2,26);g.fillStyle=t.c;const fw=Math.sin(tm*5)*2;
+    g.beginPath();g.moveTo(px+12.5,py-32);g.lineTo(px+25,py-28+fw);g.lineTo(px+12.5,py-23);g.fill();
+    const n=Math.min(6,Math.round(t.pop/8));
+    for(let i=0;i<n;i++){
+      const a=tm*.35+i*1.9,qx=px+12+Math.cos(a)*(28+i*3),qy=py+16+Math.sin(a*1.3)*(10+i),bob=Math.abs(Math.sin(tm*5+i))*1.2;
+      g.fillStyle='#3a2a1a';g.fillRect(qx-2,qy+4,1.6,3);g.fillRect(qx+.5,qy+4,1.6,3);
+      g.fillStyle=t.c;if(i%2){g.beginPath();g.moveTo(qx-2.5,qy-2-bob);g.lineTo(qx+2.5,qy-2-bob);g.lineTo(qx+4,qy+5);g.lineTo(qx-4,qy+5);g.fill()}else g.fillRect(qx-2.5,qy-3-bob,5,8);
+      g.fillStyle='#f1c9a0';g.beginPath();g.arc(qx,qy-5-bob,3,0,7);g.fill();
+    }
+    g.font='bold 12px Tahoma,sans-serif';g.textAlign='center';g.lineWidth=3;g.strokeStyle='rgba(0,0,0,.7)';g.fillStyle='#fff';
+    const lb=(t.rel=='friend'?'🤝 ':'⚔️ ')+t.n;g.strokeText(lb,px+12,py-38);g.fillText(lb,px+12,py-38);
+    g.lineWidth=1;g.textAlign='left';
+  }
+}
+function drawRaiders(){
+  for(const r of raiders){
+    const px=r.x*T,py=r.y*T,bob=r.mov?Math.abs(Math.sin(r.ph))*1.5:0,lg=r.mov?Math.sin(r.ph)*2:0;
+    g.fillStyle='rgba(0,0,0,.3)';g.beginPath();g.ellipse(px,py+8,5,2,0,0,7);g.fill();
+    g.fillStyle='#2a1a10';g.fillRect(px-2.5+lg,py+4,2,4);g.fillRect(px+.5-lg,py+4,2,4);
+    g.fillStyle=r.tr.c;g.fillRect(px-3.5,py-3-bob,7,8);
+    g.fillStyle='#f1c9a0';g.beginPath();g.arc(px,py-6-bob,3.4,0,7);g.fill();
+    g.fillStyle='#78909c';g.beginPath();g.arc(px,py-6.5-bob,3.8,Math.PI,0);g.fill();
+    g.fillStyle='#cfd8dc';g.fillRect(px+4,py-12-bob,1.2,14);
+    g.fillStyle='#000';g.fillRect(px-6,py-13-bob,12,2);g.fillStyle='#e74c3c';g.fillRect(px-6,py-13-bob,12*clamp(r.hp/(50+era()*6),0,1),2);
+  }
+}
+
 // ===== شادی =====
 function updateHappy(){
   let h=50;
@@ -505,8 +663,10 @@ function upd(dt){
   lsT-=dt;if(lsT<=0){lsT=1;lists()}
   V.forEach(v=>step(v,dt));
   updateWolves(dt);
+  updateTribes(dt);updateRaiders(dt);
   R.food=Math.max(0,R.food-.06*P*dt);
   updateHappy();
+  warnT-=dt;if(R.food<P*3&&warnT<=0){warnT=40;msg('⚠️ غذا داره تموم میشه! کشاورز و جمع‌آورنده بیشتر کن')}
 
   spT+=dt;
   if(spT>4){spT=0;
@@ -515,7 +675,7 @@ function upd(dt){
   }
   if(R.food<=0){
     stT+=dt;
-    if(stT>10&&P>1){
+    if(stT>15&&P>1){
       stT=0;P=Math.max(1,P-Math.max(1,Math.floor(P*.03)));
       syncU();msg('💀 قحطی! آدما دارن از گرسنگی میمیرن');
       recentFamine=true;
@@ -798,12 +958,18 @@ function draw(){
     if(b==selB){g.strokeStyle='#fff';g.lineWidth=2;g.strokeRect(px,py,T,T);g.lineWidth=1}
   }
 
+  drawTribes();
+
   for(const v of [...V].sort((a,c)=>a.y-c.y)){
     const px=v.x*T,py=v.y*T,bob=v.mov?Math.abs(Math.sin(v.ph))*1.5:0,lg=v.mov?Math.sin(v.ph)*2:0;
     g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(px,py+8,5,2,0,0,7);g.fill();
     g.fillStyle='#3a2a1a';g.fillRect(px-2.5+lg,py+4,2,4);g.fillRect(px+.5-lg,py+4,2,4);
-    g.fillStyle=v.job?JOBS[v.job][1]:'#666';g.fillRect(px-3,py-3-bob,6,8);
+    g.fillStyle=v.job?JOBS[v.job][1]:'#666';
+    if(v.f){g.fillRect(px-3,py-3-bob,6,4);g.beginPath();g.moveTo(px-3,py+1-bob);g.lineTo(px+3,py+1-bob);g.lineTo(px+4.6,py+6);g.lineTo(px-4.6,py+6);g.fill()}
+    else g.fillRect(px-3,py-3-bob,6,8);
     g.fillStyle='#f1c9a0';g.beginPath();g.arc(px,py-6-bob,3.4,0,7);g.fill();
+    if(v.f){g.fillStyle='#2b1b10';g.beginPath();g.arc(px,py-6.6-bob,3.8,Math.PI,0);g.fill();g.fillRect(px-3.8,py-6.6-bob,1.6,6);g.fillRect(px+2.2,py-6.6-bob,1.6,6)}
+    if(v.job=='guard'){g.fillStyle='#90a4ae';g.beginPath();g.arc(px,py-6.6-bob,3.8,Math.PI,0);g.fill()}
     if(v.job=='wood'||v.job=='mine'||v.job=='stone'){g.fillStyle='#555';g.fillRect(px+3,py-6-bob,1.5,8)}
     if(v.job=='guard'){g.fillStyle='#c0392b';g.fillRect(px-3,py-4-bob,6,2)}
     if(v.job=='scout'){g.fillStyle='#2e8b57';g.fillRect(px-3,py-9-bob,6,1.5)}
@@ -821,6 +987,8 @@ function draw(){
     g.fillStyle='#000';g.fillRect(px-6,py-12,12,2);
     g.fillStyle='#e74c3c';g.fillRect(px-6,py-12,12*Math.max(0,w.hp/40),2);
   }
+
+  drawRaiders();
 
   for(const q of Q){
     g.globalAlpha=Math.max(0,q.l/q.m);g.fillStyle=q.c;
@@ -883,6 +1051,8 @@ function drawMini(){
   for(const v of V)miniCtx.fillRect(v.x|0,v.y|0,1,1);
   miniCtx.fillStyle='#e74c3c';
   for(const w of wolves)miniCtx.fillRect(w.x|0,w.y|0,1.5,1.5);
+  for(const t of TB){miniCtx.fillStyle=t.c;miniCtx.fillRect(t.x-2,t.y-2,5,5)}
+  miniCtx.fillStyle='#ff1744';for(const r of raiders)miniCtx.fillRect(r.x|0,r.y|0,2,2);
   miniCtx.strokeStyle='#fff';miniCtx.lineWidth=1;
   miniCtx.strokeRect(cam.x/T,cam.y/T,(VW/z)/T,(VH/z)/T);
 }
@@ -894,6 +1064,7 @@ function canPlace(t,x,y){
   if(t=='lumber_mill')return M[y][x]==1;
   return M[y][x]==0;
 }
+function clickAt(x,y){click(x,y)}
 function click(x,y){
   if(x<0||y<0||x>=W||y>=H)return;
   if(tool&&COST[tool]){
@@ -922,6 +1093,7 @@ const pos=e=>{const r=cv.getBoundingClientRect();return{sx:(e.clientX-r.left)/r.
 const tile=e=>{const p=pos(e);return[Math.floor((cam.x+p.sx/z)/T),Math.floor((cam.y+p.sy/z)/T)]};
 const clampCam=()=>{cam.x=clamp(cam.x,0,W*T-VW/z);cam.y=clamp(cam.y,0,H*T-VH/z)};
 function zoom(f,cx0,cy0){
+  if(!isFinite(f)||f<=0)return;
   const cx=cx0!==undefined?cx0:cam.x+VW/z/2;
   const cy=cy0!==undefined?cy0:cam.y+VH/z/2;
   const beforeX=(cx-cam.x)*z,beforeY=(cy-cam.y)*z;
@@ -930,22 +1102,26 @@ function zoom(f,cx0,cy0){
   clampCam();
 }
 
+const ptrs=new Map();let gest=null;
+function startG(){const a=[...ptrs.values()];gest={d:Math.hypot(a[0].sx-a[1].sx,a[0].sy-a[1].sy)||1,mx:(a[0].sx+a[1].sx)/2,my:(a[0].sy+a[1].sy)/2}}
 cv.addEventListener('pointerdown',e=>{
   try{cv.setPointerCapture(e.pointerId)}catch(_){}
-  if(e.pointerType=='touch'){
-    if(!pinch)pinch={ids:[e.pointerId],d:0,x:e.clientX,y:e.clientY};
-    else if(pinch.ids.length==1)pinch.ids.push(e.pointerId);
-    if(pinch.ids.length==2)return;
-  }
+  ptrs.set(e.pointerId,pos(e));
+  if(ptrs.size>=2){startG();drag=null;return}
   const p=pos(e);
   drag={sx:p.sx,sy:p.sy,cx:cam.x,cy:cam.y,moved:false};
   if(tool=='road')paintRoad(e);
 });
 cv.addEventListener('pointermove',e=>{
   hov=tile(e);
-  if(pinch&&pinch.ids.length==2){
-    if(pinch.lastD!==undefined){zoom(pinch.d/pinch.lastD)}
-    pinch.lastD=pinch.d;return;
+  if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,pos(e));
+  if(ptrs.size>=2&&gest){
+    const a=[...ptrs.values()],d=Math.hypot(a[0].sx-a[1].sx,a[0].sy-a[1].sy)||1,mx=(a[0].sx+a[1].sx)/2,my=(a[0].sy+a[1].sy)/2,f=d/gest.d;
+    if(isFinite(f)&&f>0){
+      const wx=cam.x+gest.mx/z,wy=cam.y+gest.my/z;
+      z=clamp(z*f,0.4,2.5);cam.x=wx-mx/z;cam.y=wy-my/z;clampCam();
+    }
+    gest.d=d;gest.mx=mx;gest.my=my;return;
   }
   if(!drag)return;
   if(tool=='road'){paintRoad(e);return}
@@ -953,29 +1129,15 @@ cv.addEventListener('pointermove',e=>{
   if(Math.hypot(dx,dy)>8)drag.moved=true;
   if(drag.moved){cam.x=drag.cx-dx/z;cam.y=drag.cy-dy/z;clampCam()}
 });
-cv.addEventListener('pointerup',e=>{
-  if(pinch){
-    if(pinch.ids.length==2){
-      pinch.ids.pop();pinch.lastD=undefined;
-      if(pinch.ids.length==0)pinch=null;
-      return;
-    }
-    pinch=null;
-  }
-  if(drag&&!drag.moved&&tool!='road')click(...tile(e));
+function endP(e,click){
+  const wasG=gest;ptrs.delete(e.pointerId);
+  if(ptrs.size<2)gest=null;
+  if(wasG){drag=null;return}
+  if(click&&drag&&!drag.moved&&tool!='road')clickAt(...tile(e));
   drag=null;
-});
-cv.addEventListener('pointercancel',()=>{pinch=null;drag=null});
-cv.addEventListener('touchmove',e=>{
-  if(e.touches.length==2){
-    e.preventDefault();
-    const t1=e.touches[0],t2=e.touches[1];
-    const d=Math.hypot(t1.clientX-t2.clientX,t1.clientY-t2.clientY);
-    if(pinch&&pinch.lastD){zoom(d/pinch.lastD)}
-    pinch={ids:[1,2],lastD:d};
-  }
-},{passive:false});
-cv.addEventListener('touchend',()=>{if(pinch&&pinch.lastD)pinch.lastD=undefined});
+}
+cv.addEventListener('pointerup',e=>endP(e,true));
+cv.addEventListener('pointercancel',e=>endP(e,false));
 cv.addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY<0?1.15:.87)},{passive:false});
 $('zi').onclick=()=>zoom(1.25);
 $('zo').onclick=()=>zoom(.8);
@@ -1103,6 +1265,19 @@ function ui(){
   });
   const c=tcost(),full=TR.x0<=0&&TR.y0<=0&&TR.x1>=W&&TR.y1>=H;
   $('ex').textContent=full?'🗺️ کل نقشه مال توئه':'🗺️ گسترش قلمرو ('+costStr(c)+')';
+  TB.forEach((t,i)=>{
+    const st=$('ts_'+i);if(!st)return;
+    if(t.rel=='friend')st.textContent=`🤝 دوست — جمعیت ${fa(t.pop)} — دوستی ${fa(t.att)}٪${t.ally?' — هم‌پیمان ✔':''}`;
+    else{
+      const x=!barracksOK()?'تا سربازخانه نسازی حمله نمیکنه':t.truce>0?'آتش‌بس '+fa(t.truce)+' ثانیه':raiders.some(r=>r.tr==t)?'در حال حمله!':'حمله‌ی بعدی حدود '+fa(Math.max(0,t.raidT))+' ثانیه';
+      st.textContent=`👿 دشمن — قدرت ${fa(tStr(t))} — ${x}`;
+    }
+    const a=$('ta_'+i);if(a){a.disabled=t.ally;a.textContent=t.ally?'🛡️ هم‌پیمان ✔':'🛡️ پیمان دفاعی (۶۰ طلا)'}
+    const tt=$('tt_'+i);if(tt)tt.textContent='💰 باج ('+fa(tribute())+' طلا)';
+  });
+  $('def').textContent='دفاع تو: '+fa(defPower());
+  const al=$('alert');
+  if(raiders.length){al.style.display='block';al.textContent='⚔️ '+fa(raiders.length)+' سرباز دشمن نزدیکه! دفاع تو: '+fa(defPower())}else al.style.display='none';
   const sp=$('sp');
   if(selB){
     sp.style.display='';
@@ -1119,6 +1294,7 @@ function ui(){
 function loop(t){
   try{
     const dt=Math.min(.05,(t-last)/1000||0);last=t;
+    if(!isFinite(z)||!isFinite(cam.x)||!isFinite(cam.y)){z=0.85;cam={x:W*T/2-VW/z/2,y:H*T/2-VH/z/2}}
     for(let i=0;i<spd;i++)upd(dt);
     draw();ui();
   }catch(e){window.onerror(e.message,'',e.lineNumber||0)}
