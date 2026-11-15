@@ -83,7 +83,7 @@ const fa=n=>Math.round(n).toLocaleString('fa-IR');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 // ===== ثابت‌ها =====
-const T=24,W=192,H=128,VW=960,VH=600;
+const T=16,W=192,H=128,VW=960,VH=600; // T از 24 به 16 کاهش یافت تا در موبایل کرش نکند
 const cv=$('c'),g=cv.getContext('2d');cv.width=VW;cv.height=VH;
 
 const COST={
@@ -128,7 +128,7 @@ const TECHS={
 };
 
 // ===== وضعیت =====
-let M,RS,SH,RD,BG,R,V,B,J,P,TR,ex,cam,z,tool,selB,tm,S,night,nd,spd=1,spT,stT,rgT,lsT,auT,won,last=0,autoOn=true,drag=null,hov=null,eraI=0,Q=[],L={1:[],2:[],3:[]};
+let M,RS,SH,RD,BG,R,V,B,J,P,TR,ex,cam,z,tool,selB,tm,S,night,nd,spd=1,spT,stT,rgT,lsT,fgT,auT,won,last=0,autoOn=true,drag=null,hov=null,eraI=0,Q=[],L={1:[],2:[],3:[]};
 let fog,terrainCanvas,terrainCtx,terrainDirty=true,fogCanvas,fogCtx,lastSeason=-1;
 let wolves=[],happy=60,nextWolfT=90,nextEventT=90,recentFamine=false;
 let techUnlocked={};
@@ -159,7 +159,7 @@ function init(){
   ex=0;J={wood:2,stone:0,food:2,farm:0,mine:0,lumber:0,mill:0,bake:0,build:1,scout:0,guard:0};
   V=[];syncU();
   z=0.85;cam={x:W*T/2-VW/z/2,y:H*T/2-VH/z/2};
-  tool=null;selB=null;tm=0;S=0;night=false;nd=0;spT=stT=rgT=lsT=auT=0;won=false;eraI=0;Q=[];
+  tool=null;selB=null;tm=0;S=0;night=false;nd=0;spT=stT=rgT=lsT=fgT=auT=0;won=false;eraI=0;Q=[];
   wolves=[];happy=60;nextWolfT=90;nextEventT=90;recentFamine=false;techUnlocked={};
   fog=new Uint8Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++)
     if(Math.hypot(x-W/2,y-H/2)<15)fog[y*W+x]=1;
@@ -396,7 +396,6 @@ function spawnWolf(){
   else if(side==1){x=rnd(0,W);y=H-2}
   else if(side==2){x=1;y=rnd(0,H)}
   else{x=W-2;y=rnd(0,H)}
-  // فقط خارج از قلمرو
   if(inT(Math.floor(x),Math.floor(y)))return;
   wolves.push({x,y,hp:40,st:'seek',t:0,atkCd:0});
   msg('🐺 یه گرگ نزدیک شد!');
@@ -414,13 +413,11 @@ function updateWolves(dt){
   }
   for(let i=wolves.length-1;i>=0;i--){
     const w=wolves[i];
-    // هدف: نزدیک‌ترین villager
     let tgt=null,bd=1e9;
     for(const v of V){const d=(v.x-w.x)**2+(v.y-w.y)**2;if(d<bd){bd=d;tgt=v}}
     if(!tgt){wolves.splice(i,1);continue}
     const dx=tgt.x-w.x,dy=tgt.y-w.y,d=Math.hypot(dx,dy);
     const sp=1.8*dt;
-    // حرکت
     if(d>0.9){w.x+=dx/d*sp;w.y+=dy/d*sp}
     else{
       w.atkCd-=dt;
@@ -436,7 +433,6 @@ function updateWolves(dt){
         }
       }
     }
-    // حمله از برج‌ها
     for(const b of B){
       if(b.t=='tower'&&b.done){
         const dd=Math.hypot(b.x-w.x,b.y-w.y);
@@ -447,7 +443,6 @@ function updateWolves(dt){
         }
       }
     }
-    // حمله از نگهبان‌ها
     for(const v of V)if(v.job=='guard'){
       const dd=Math.hypot(v.x-w.x,v.y-w.y);
       if(dd<4){w.hp-=dt*20;
@@ -538,8 +533,8 @@ function upd(dt){
   auT+=dt;if(autoOn&&auT>6){auT=0;auto()}
 
   // فرگ
-  lsT-=dt;
-  updateFog();
+  fgT-=dt;
+  if(fgT<=0){fgT=0.3;updateFog()}
 
   // رویداد
   nextEventT-=dt;
@@ -585,6 +580,7 @@ function updateFog(force){
   if(changed||force)renderFog();
 }
 function renderFog(){
+  if(!fogCtx)return;
   const img=fogCtx.createImageData(W,H);
   for(let i=0;i<W*H;i++){
     if(fog[i]==0){img.data[i*4]=6;img.data[i*4+1]=10;img.data[i*4+2]=14;img.data[i*4+3]=255}
@@ -599,6 +595,7 @@ const gcol=sh=>{const c=GC[S],k=(sh-.5)*22;return`rgb(${c[0]+k|0},${c[1]+k|0},${
 
 function rebuildTerrain(){
   const c=terrainCtx;
+  if(!c)return;
   c.clearRect(0,0,W*T,H*T);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const px=x*T,py=y*T,t=M[y][x],sh=SH[y][x];
@@ -704,10 +701,8 @@ function dCamp(px,py){
 function dLumberMill(px,py,b){
   g.fillStyle='#8b6b45';g.fillRect(px+2,py+10,20,12);
   g.fillStyle='#5d3a1a';g.beginPath();g.moveTo(px,py+11);g.lineTo(px+12,py+2);g.lineTo(px+24,py+11);g.fill();
-  // log
   g.fillStyle='#a0522d';g.fillRect(px+4,py+18,10,4);
   g.strokeStyle='#8b3a1a';g.lineWidth=1;g.beginPath();g.arc(px+4,py+20,2,0,7);g.stroke();
-  // saw
   g.save();g.translate(px+16,py+16);g.rotate(Math.sin(tm*8)*.1);
   g.fillStyle='#ccc';g.fillRect(-6,-1,12,2);g.restore();
   if(b.lv>1){g.fillStyle='#8a4b12';g.fillRect(px+16,py-2,6,10)}
@@ -717,7 +712,6 @@ function dMill(px,py,b){
   g.fillStyle='#d9c9a3';g.fillRect(px+4,py+10,16,12);
   g.fillStyle='#a8442f';g.beginPath();g.moveTo(px+2,py+11);g.lineTo(px+12,py+2);g.lineTo(px+22,py+11);g.fill();
   g.fillStyle='#5d3a1a';g.fillRect(px+10,py+16,4,6);
-  // blades
   g.save();g.translate(px+12,py+9);g.rotate(tm*2);
   g.fillStyle='#f5f0e0';
   for(let i=0;i<4;i++){g.rotate(Math.PI/2);g.fillRect(-1,-10,2,9)}
@@ -738,11 +732,9 @@ function dBakery(px,py,b){
 }
 function dMarket(px,py,b){
   g.fillStyle='#f5d76e';g.beginPath();g.moveTo(px,py+10);g.lineTo(px+24,py+10);g.lineTo(px+20,py+22);g.lineTo(px+4,py+22);g.fill();
-  // stripes
   g.fillStyle='#c0392b';
   for(let i=0;i<4;i++)g.fillRect(px+2+i*5,py+10,3,12);
   g.fillStyle='#5d3a1a';g.fillRect(px+2,py+10,1.5,12);g.fillRect(px+20,py+10,1.5,12);
-  // goods
   g.fillStyle='#d4a017';g.fillRect(px+6,py+18,4,4);
   g.fillStyle='#8b5a2b';g.fillRect(px+14,py+18,4,4);
   if(b.lv>1){g.fillStyle='#8a4b12';g.fillRect(px+17,py+2,5,8)}
@@ -762,7 +754,6 @@ function dTower(px,py,b){
   for(let i=0;i<4;i++)g.fillRect(px+4+i*4,py+2,3,3);
   g.fillStyle='#555';g.fillRect(px+9,py+14,6,10);
   g.fillStyle='#ffd75e';g.fillRect(px+10,py+16,4,4);
-  // flag
   g.strokeStyle='#333';g.lineWidth=1;g.beginPath();g.moveTo(px+12,py+2);g.lineTo(px+12,py-8);g.stroke();
   g.fillStyle='#2980b9';g.beginPath();g.moveTo(px+12,py-8);g.lineTo(px+18,py-6+Math.sin(tm*4)*1.5);g.lineTo(px+12,py-4);g.fill();
   if(b.lv>1){g.fillStyle='#8a4b12';g.fillRect(px+18,py+6,3,8)}
@@ -773,7 +764,6 @@ function dBarracks(px,py,b){
   g.fillStyle='#4e2a0a';g.fillRect(px+2,py+4,20,3);
   g.fillStyle='#8a4b12';g.beginPath();g.moveTo(px,py+6);g.lineTo(px+12,py-2);g.lineTo(px+24,py+6);g.fill();
   g.fillStyle='#3e2a14';g.fillRect(px+9,py+14,6,8);
-  // sword emblem
   g.strokeStyle='#ddd';g.lineWidth=1.5;
   g.beginPath();g.moveTo(px+12,py+8);g.lineTo(px+12,py+13);g.moveTo(px+10,py+11);g.lineTo(px+14,py+11);g.stroke();
   if(b.lv>1){g.fillStyle='#c0392b';g.fillRect(px+17,py-2,5,8)}
@@ -799,10 +789,8 @@ function draw(){
   g.save();
   g.imageSmoothingEnabled=false;
   g.globalAlpha=1;
-  // ذخیره transform
   const zz=z, cx=cam.x, cy=cam.y;
   g.setTransform(1,0,0,1,0,0);
-  // rect تصویر فرگ
   const fx=(cx/T),fy=(cy/T),fw=(VW/zz/T),fh=(VH/zz/T);
   g.drawImage(fogCanvas,fx,fy,fw,fh,0,0,VW,VH);
   g.setTransform(zz,0,0,zz,-cx*zz,-cy*zz);
@@ -851,7 +839,6 @@ function draw(){
     g.fillStyle='#333';g.beginPath();g.arc(px-6,py-2,3,0,7);g.fill();
     g.fillStyle='#e74c3c';g.fillRect(px-8,py-3,1.5,1.5);
     g.fillStyle='#555';g.fillRect(px+5,py-6,2,4);
-    // hp bar
     g.fillStyle='#000';g.fillRect(px-6,py-12,12,2);
     g.fillStyle='#e74c3c';g.fillRect(px-6,py-12,12*Math.max(0,w.hp/40),2);
   }
@@ -870,7 +857,7 @@ function draw(){
     g.fillRect(hx*T,hy*T,T,T);
   }
 
-  // شب و نور آتشگاه/خانه‌ها
+  // شب و نور
   g.setTransform(1,0,0,1,0,0);
   if(nd>0){
     g.fillStyle=`rgba(8,14,50,${nd})`;g.fillRect(0,0,VW,VH);
@@ -879,8 +866,8 @@ function draw(){
       for(const b of B)if(b.done&&(b.t=='camp'||b.t=='hut'||b.t=='tower'||b.t=='market')){
         lights.push([(b.x+.5)*T,(b.y+.8)*T,b.t=='camp'?90:b.t=='tower'?70:40]);
       }
-      for(const[sx,sy,r]of lights){
-        const gx=(sx-cam.x)*z,gy=(sy-cam.y)*z;
+      for(const[sx2,sy2,r]of lights){
+        const gx=(sx2-cam.x)*z,gy=(sy2-cam.y)*z;
         if(gx<-r*z||gy<-r*z||gx>VW+r*z||gy>VH+r*z)continue;
         const gr=g.createRadialGradient(gx,gy,2,gx,gy,r*z);
         gr.addColorStop(0,'rgba(255,190,80,.55)');
@@ -912,19 +899,14 @@ function drawMini(){
     img.data[i*4]=r;img.data[i*4+1]=gg;img.data[i*4+2]=b;img.data[i*4+3]=255;
   }
   miniCtx.putImageData(img,0,0);
-  // buildings
   for(const b of B){
-    miniCtx.fillStyle=b.t=='camp'?'#ff9800':b.t=='castle'?'#fff':
-      (b.done?'#e6d8b5':'#8b5a2b');
+    miniCtx.fillStyle=b.t=='camp'?'#ff9800':b.t=='castle'?'#fff':(b.done?'#e6d8b5':'#8b5a2b');
     miniCtx.fillRect(b.x,b.y,1.5,1.5);
   }
-  // villagers
   miniCtx.fillStyle='#ffeb3b';
   for(const v of V)miniCtx.fillRect(v.x|0,v.y|0,1,1);
-  // wolves
   miniCtx.fillStyle='#e74c3c';
   for(const w of wolves)miniCtx.fillRect(w.x|0,w.y|0,1.5,1.5);
-  // viewport rect
   miniCtx.strokeStyle='#fff';miniCtx.lineWidth=1;
   miniCtx.strokeRect(cam.x/T,cam.y/T,(VW/z)/T,(VH/z)/T);
 }
@@ -986,10 +968,7 @@ cv.addEventListener('pointerdown',e=>{
 cv.addEventListener('pointermove',e=>{
   hov=tile(e);
   if(pinch&&pinch.ids.length==2){
-    // pinch
-    if(pinch.lastD!==undefined){
-      zoom(pinch.d/pinch.lastD);
-    }
+    if(pinch.lastD!==undefined){zoom(pinch.d/pinch.lastD)}
     pinch.lastD=pinch.d;return;
   }
   if(!drag)return;
@@ -1011,7 +990,6 @@ cv.addEventListener('pointerup',e=>{
   drag=null;
 });
 cv.addEventListener('pointercancel',()=>{pinch=null;drag=null});
-// برای pinch واقعی: track two touches with distance
 cv.addEventListener('touchmove',e=>{
   if(e.touches.length==2){
     e.preventDefault();
@@ -1118,7 +1096,6 @@ $('rst').onclick=()=>{
   if(confirm('همه‌چی پاک میشه. مطمئنی؟')){localStorage.removeItem(SAVE_KEY);init()}
 };
 
-// کیبورد
 document.addEventListener('keydown',e=>{
   if(e.target.tagName=='INPUT')return;
   if(e.key=='Escape'){tool=null;selB=null;msg('')}
@@ -1164,9 +1141,12 @@ function ui(){
 }
 
 function loop(t){
-  const dt=Math.min(.05,(t-last)/1000||0);last=t;
-  for(let i=0;i<spd;i++)upd(dt);
-  draw();ui();requestAnimationFrame(loop);
+  try{
+    const dt=Math.min(.05,(t-last)/1000||0);last=t;
+    for(let i=0;i<spd;i++)upd(dt);
+    draw();ui();
+  }catch(e){console.error("Loop Error:",e);}
+  requestAnimationFrame(loop);
 }
 
 // ==== شروع ====
@@ -1180,7 +1160,6 @@ miniCv=$('mc');miniCtx=miniCv.getContext('2d');
 
 init();
 
-// اگر ذخیره هست پیشنهاد ادامه
 const hasSave=localStorage.getItem(SAVE_KEY);
 if(hasSave){
   setTimeout(()=>{
@@ -1188,7 +1167,6 @@ if(hasSave){
   },100);
 }
 
-// ذخیره خودکار هر ۳۰ ثانیه
 setInterval(()=>{try{save()}catch(e){}},30000);
 
 requestAnimationFrame(loop);
