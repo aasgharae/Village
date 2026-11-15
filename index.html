@@ -141,7 +141,7 @@ const TECHS={
   irrig:{name:'💧 آبیاری',cost:{gold:70},desc:'مزرعه +۳۰٪'},
   mining:{name:'⛏️ استخراج',cost:{gold:70},desc:'معدن +۳۰٪'},
   weapons:{name:'⚔️ سلاح آهنی',cost:{gold:90},desc:'نگهبان‌ها +۳۰٪ قوی‌تر'},
-  walls:{name:'🧱 دیوار دفاعی',cost:{gold:110},desc:'ساختمون‌ها در حمله ۵۰٪ مقاوم‌تر'}
+  walls:{name:'🧱 دیوار دفاعی',cost:{gold:110},desc:'غارتگرها ۵۰٪ کمتر از انبار میبرن'}
 };
 
 // ===== وضعیت =====
@@ -257,7 +257,7 @@ function auto(){
   J.lumber=Math.min(cnt('lumber_mill')*2,Math.floor(n*.12));
   J.mill=Math.min(cnt('mill')*2,Math.floor(n*.1));
   J.bake=Math.min(cnt('bakery')*2,Math.floor(n*.1));
-  J.guard=Math.min(cnt('tower')+cnt('barracks')*3,Math.floor(n*.2));
+  J.guard=Math.min(cnt('tower')+cnt('barracks')*6,Math.floor(n*.35));
   J.scout=0;
   J.build=Math.min(Math.max(1,bs*2),Math.ceil(n*.2));
   const r=Math.max(0,n-J.farm-J.mine-J.lumber-J.mill-J.bake-J.guard-J.scout-J.build);
@@ -337,7 +337,7 @@ function step(v,dt){
     const dx=v.x-wolf.x,dy=v.y-wolf.y,d=Math.hypot(dx,dy)||1;
     mv(v.x+dx/d*2,v.y+dy/d*2);return;
   }
-  if(v.job=='guard'){const en=nearW(v,14);if(en){mv(en.x,en.y);return}}
+  if(v.job=='guard'){const en=nearW(v,raiders.length?70:14);if(en){mv(en.x,en.y);return}}
   if(!v.job){wander();return}
   if(v.st=='seek'){v.tg=find(v);v.t=0;v.st=v.tg?'go':'idle';return}
   if(v.st=='idle'){wander();v.t+=dt;if(v.t>1.5)v.st='seek';return}
@@ -490,26 +490,35 @@ function initTribes(){
 }
 const barracksOK=()=>B.some(b=>b.t=='barracks'&&b.done);
 function guardMul(){return 1+B.filter(b=>b.done&&b.t=='barracks').reduce((s,b)=>s+.25*b.lv,0)+(techUnlocked.weapons?.3:0)}
+const gScale=()=>clamp(P/Math.max(1,V.length)/6,1,12);
 function defPower(){
-  let p=0;for(const b of B)if(b.done&&b.t=='tower')p+=30*b.lv;
-  const m=guardMul();for(const v of V)if(v.job=='guard')p+=18*m;
+  let p=0;for(const b of B)if(b.done&&b.t=='tower')p+=30*b.lv*(1+era()*.3);
+  const m=guardMul(),gs=gScale();for(const v of V)if(v.job=='guard')p+=18*m*gs;
   p+=TB.filter(t=>t.ally&&t.rel=='friend').length*40;
   return Math.round(p);
 }
 const tStr=t=>Math.round(t.pop*1.3);
-const tribute=()=>40+era()*25;
+const tribute=()=>40+era()*25+Math.round(P*.04);
 function launchRaid(t){
-  let n=clamp(Math.round(t.pop/7),3,30);
+  let n=Math.round(Math.max(t.pop*.22,defPower()*rnd(.5,.85)/(14+era()*3)));
+  n=clamp(n,3,150);
   n=Math.max(2,Math.round(n*(1-.15*TB.filter(x=>x.ally&&x.rel=='friend').length)));
-  for(let i=0;i<n;i++)raiders.push({x:t.x+rnd(-2,2),y:t.y+rnd(-2,2),hp:50+era()*6,tr:t,age:0,cd:0,ph:rnd(0,6),mov:true});
-  t.raidT=rnd(170,260);
-  msg('⚠️ '+t.n+' با '+fa(n)+' سرباز داره میاد سمتت! دفاع کن یا باج بده');
+  const mh=50+era()*14;
+  for(let i=0;i<n;i++)raiders.push({x:t.x+rnd(-2,2),y:t.y+rnd(-2,2),hp:mh,mh,dmg:14+era()*4,tr:t,age:0,cd:0,ph:rnd(0,6),mov:true,st:'go',lt:0,carry:null,tot:0});
+  t.raidT=rnd(170,260);t.esc=0;t.rec=0;
+  msg('⚠️ '+t.n+' با '+fa(n)+' غارتگر داره میاد سمت انبارهات! دفاع کن یا باج بده');
+}
+function endRaidCheck(t){
+  if(raiders.some(x=>x.tr==t))return;
+  if(t.esc>0)msg('🏴‍☠️ '+t.n+' با غنیمت فرار کرد؛ '+fa(t.esc)+' واحد منابع از انبارها رفت'+(t.rec>0?' ('+fa(t.rec)+' رو پس گرفتی)':''));
+  else{t.pop=Math.max(10,t.pop-6);t.raidT+=60;msg('🛡️ حمله‌ی '+t.n+' دفع شد'+(t.rec>0?' و '+fa(t.rec)+' غنیمت رو پس گرفتی':'')+'!')}
 }
 function calmTribe(t){for(let i=raiders.length-1;i>=0;i--)if(raiders[i].tr==t)raiders.splice(i,1)}
 function updateTribes(dt){
   if(barracksOK()&&!barMsg){barMsg=true;msg('⚔️ سربازخانه داری؛ از حالا دشمن‌ها ممکنه حمله کنن. برج و نگهبان آماده کن')}
   for(const t of TB){
-    t.pop=Math.min(220,t.pop+dt*(.03+era()*.01));
+    const tg=Math.min(600,40+era()*60+P*.05);
+    t.pop+=Math.max(.03,(tg-t.pop)*.012)*dt;
     t.truce=Math.max(0,t.truce-dt);
     if(t.rel=='enemy'&&barMsg&&t.truce<=0&&!raiders.some(r=>r.tr==t)){
       t.raidT-=dt;if(t.raidT<=0)launchRaid(t);
@@ -517,50 +526,53 @@ function updateTribes(dt){
   }
 }
 function updateRaiders(dt){
-  const gm=guardMul();
+  const gm=guardMul(),gs=gScale(),ea=1+era()*.3;
   for(let i=raiders.length-1;i>=0;i--){
     const r=raiders[i];r.age+=dt;
-    if(r.age>160||!V.length){raiders.splice(i,1);continue}
-    let tg=null,bd=36;
-    for(const v of V){const d=(v.x-r.x)**2+(v.y-r.y)**2;if(d<bd){bd=d;tg={x:v.x,y:v.y,v}}}
-    if(!tg){let b2=1e9;for(const b of B){const d=(b.x+.5-r.x)**2+(b.y+.5-r.y)**2;if(d<b2){b2=d;tg={x:b.x+.5,y:b.y+.5,b}}}}
+    if(r.age>220||!V.length){const t=r.tr;raiders.splice(i,1);endRaidCheck(t);continue}
     r.mov=false;
-    if(tg){
-      const dx=tg.x-r.x,dy=tg.y-r.y,d=Math.hypot(dx,dy)||1;
-      if(d>1){
-        const sp=1.7*dt,nx=r.x+dx/d*sp,ny=r.y+dy/d*sp;r.mov=true;r.ph+=dt*9;
-        if(!wat(nx,ny)){r.x=nx;r.y=ny}else if(!wat(nx,r.y))r.x=nx;else if(!wat(r.x,ny))r.y=ny;
+    const go=(tx,ty)=>{
+      const dx=tx-r.x,dy=ty-r.y,d=Math.hypot(dx,dy)||1;
+      if(d>1){const sp=1.7*dt,nx=r.x+dx/d*sp,ny=r.y+dy/d*sp;r.mov=true;r.ph+=dt*9;
+        if(!wat(nx,ny)){r.x=nx;r.y=ny}else if(!wat(nx,r.y))r.x=nx;else if(!wat(r.x,ny))r.y=ny}
+      return d;
+    };
+    if(r.st=='flee'){
+      if(go(r.tr.x+.5,r.tr.y+.5)<2){const t=r.tr;t.esc=(t.esc||0)+r.tot;raiders.splice(i,1);endRaidCheck(t);continue}
+    }else{
+      let vt=null,bd=6.25;
+      for(const v of V){const d=(v.x-r.x)**2+(v.y-r.y)**2;if(d<bd){bd=d;vt=v}}
+      if(vt){
+        if(bd>1)go(vt.x,vt.y);
+        else{r.cd-=dt;if(r.cd<=0){r.cd=1;
+          const dmg=vt.job=='guard'?r.dmg/gs:r.dmg;vt.hp-=dmg;
+          addP(vt.x*T,vt.y*T,rnd(-8,8),-18,.6,'#c0392b',2);
+          if(vt.hp<=0){const k=V.indexOf(vt);if(k>=0)V.splice(k,1);
+            P=Math.max(1,P-Math.max(1,Math.round(P/Math.max(1,V.length+1)*.2)));msg('💀 چند نفر توسط غارتگرها کشته شدن')}}}
       }else{
-        r.cd-=dt;
-        if(r.cd<=0){
-          r.cd=1;
-          if(tg.v){
-            const v=tg.v;v.hp-=v.job=='guard'?7:14;
-            addP(v.x*T,v.y*T,rnd(-8,8),-18,.6,'#c0392b',2);
-            if(v.hp<=0){const k=V.indexOf(v);if(k>=0)V.splice(k,1);P=Math.max(1,P-1);msg('💀 یه نفر توسط مهاجمین کشته شد')}
-          }else if(tg.b){
-            const b=tg.b;
-            if(b.t=='camp'){for(const k of['food','wood','gold'])R[k]=Math.max(0,R[k]*.97)}
-            else{
-              if(b.hp==null)b.hp=60+40*b.lv;
-              b.hp-=10*(techUnlocked.walls?.5:1);
-              addP((b.x+.5)*T,(b.y+.5)*T,rnd(-10,10),-20,.5,'#ff9800',2);
-              if(b.hp<=0){b.hp=null;b.done=false;b.p=0;b.up=false;
-                for(const k of['food','wood','stone','gold'])R[k]=Math.floor(R[k]*.88);
-                msg('🔥 '+NAME[b.t]+' غارت شد و از کار افتاد! دوباره بسازش')}
-            }
+        let st=null,b2=1e9;
+        for(const b of B)if(b.done&&(b.t=='store'||b.t=='camp')){const d=(b.x+.5-r.x)**2+(b.y+.5-r.y)**2;if(d<b2){b2=d;st=b}}
+        if(!st)r.st='flee';
+        else if(go(st.x+.5,st.y+.5)<1.2){
+          r.lt+=dt;
+          if(Math.random()<dt*4)addP((st.x+.5)*T,(st.y+.5)*T,rnd(-10,10),-20,.5,'#ffd54f',2);
+          if(r.lt>=4){
+            const c={};let tot=0;
+            for(const k of['food','wood','stone','gold']){const a=Math.min(R[k]*.02,10+era()*8)*(techUnlocked.walls?.5:1);R[k]-=a;c[k]=a;tot+=a}
+            r.carry=c;r.tot=tot;r.st='flee';
           }
         }
       }
     }
     for(const b of B)if(b.done&&b.t=='tower'&&Math.hypot(b.x-r.x,b.y-r.y)<9){
-      r.hp-=dt*14*b.lv;
+      r.hp-=dt*14*b.lv*ea;
       if(Math.random()<dt*3)addP(b.x*T+12,b.y*T,rnd(-4,4),rnd(-20,-5),.5,'#ffe066',1.5);
     }
-    for(const v of V)if(v.job=='guard'&&Math.hypot(v.x-r.x,v.y-r.y)<2)r.hp-=dt*20*gm;
+    for(const v of V)if(v.job=='guard'&&Math.hypot(v.x-r.x,v.y-r.y)<2)r.hp-=dt*20*gm*gs;
     if(r.hp<=0){
-      raiders.splice(i,1);R.gold=Math.min(capR(),R.gold+2);
-      if(!raiders.some(x=>x.tr==r.tr)){r.tr.pop=Math.max(10,r.tr.pop-6);r.tr.raidT+=60;msg('🛡️ حمله‌ی '+r.tr.n+' دفع شد!')}
+      const t=r.tr;
+      if(r.carry){for(const k in r.carry)R[k]=Math.min(capR(),R[k]+r.carry[k]);t.rec=(t.rec||0)+r.tot}
+      R.gold=Math.min(capR(),R.gold+2);raiders.splice(i,1);endRaidCheck(t);
     }
   }
 }
@@ -615,7 +627,8 @@ function drawRaiders(){
     g.fillStyle='#f1c9a0';g.beginPath();g.arc(px,py-6-bob,3.4,0,7);g.fill();
     g.fillStyle='#78909c';g.beginPath();g.arc(px,py-6.5-bob,3.8,Math.PI,0);g.fill();
     g.fillStyle='#cfd8dc';g.fillRect(px+4,py-12-bob,1.2,14);
-    g.fillStyle='#000';g.fillRect(px-6,py-13-bob,12,2);g.fillStyle='#e74c3c';g.fillRect(px-6,py-13-bob,12*clamp(r.hp/(50+era()*6),0,1),2);
+    if(r.carry){g.fillStyle='#8d6e3f';g.beginPath();g.arc(px-5,py-1-bob,3.2,0,7);g.fill();g.fillStyle='#ffd54f';g.fillRect(px-6,py-2-bob,2,2)}
+    g.fillStyle='#000';g.fillRect(px-6,py-13-bob,12,2);g.fillStyle='#e74c3c';g.fillRect(px-6,py-13-bob,12*clamp(r.hp/r.mh,0,1),2);
   }
 }
 
