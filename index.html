@@ -173,6 +173,14 @@ function init(){
   R={food:40,wood:30,stone:0,gold:10,lumber:0,flour:0,bread:0};
   initTribes();barMsg=false;warnT=0;
   P=5;B=[];const c={t:'camp',x:Math.floor(W/2),y:Math.floor(H/2),lv:1,done:true,p:0,up:false};B.push(c);BG[c.y][c.x]=c;
+  (function(){
+    const x0=W/2-20,x1=W/2+20,y0=H/2-16,y1=H/2+16;
+    const cnt=t=>{let c=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++)if(M[y][x]==t)c++;return c};
+    const put=(t,n,res,dmin,dmax)=>{let g=0;while(cnt(t)<n&&g++<4000){const a=rnd(0,6.28),d=rnd(dmin,dmax),x=Math.round(W/2+Math.cos(a)*d),y=Math.round(H/2+Math.sin(a)*d);if(x>x0&&x<x1-1&&y>y0&&y<y1-1&&M[y][x]==0){M[y][x]=t;RS[y][x]=res}}};
+    put(1,40,5,5,15);put(2,14,6,6,15);put(3,16,5,4,13);
+    if(cnt(5)<10){const cx=W/2+(Math.random()<.5?-1:1)*14,cy=H/2+(Math.random()<.5?-1:1)*10;
+      for(let y=-2;y<=2;y++)for(let x=-3;x<=3;x++)if(Math.hypot(x/1.5,y)<2.2&&M[cy+y][cx+x]!=4){M[cy+y][cx+x]=5;RS[cy+y][cx+x]=0}}
+  })();
   TR={x0:W/2-20,y0:H/2-16,x1:W/2+20,y1:H/2+16};
   ex=0;J={wood:2,stone:0,food:2,farm:0,mine:0,lumber:0,mill:0,bake:0,build:1,scout:0,guard:0};
   V=[];syncU();
@@ -252,18 +260,20 @@ function assign(){
 }
 function auto(){
   const n=V.length,cnt=t=>B.filter(b=>b.t==t&&b.done).length,bs=B.filter(b=>!b.done||b.up).length;
-  J.farm=Math.min(cnt('farm')*3,Math.floor(n*.35));
-  J.mine=Math.min(cnt('mine')*3,Math.floor(n*.18));
-  J.lumber=Math.min(cnt('lumber_mill')*2,Math.floor(n*.12));
-  J.mill=Math.min(cnt('mill')*2,Math.floor(n*.1));
-  J.bake=Math.min(cnt('bakery')*2,Math.floor(n*.1));
-  J.guard=Math.min(cnt('tower')+cnt('barracks')*6,Math.floor(n*.35));
+  const base=Math.min(n,Math.max(3,Math.round(n*.3)));
+  let rem=n-base;
+  const take=(k,want)=>{const a=Math.max(0,Math.min(want,rem));J[k]=a;rem-=a};
+  take('build',Math.min(Math.max(1,bs*2),Math.ceil(n*.2)));
+  take('farm',Math.min(cnt('farm')*3,Math.floor(n*.3)));
+  take('mine',Math.min(cnt('mine')*3,Math.floor(n*.15)));
+  take('guard',Math.min(cnt('tower')+cnt('barracks')*6,Math.floor(n*.25)));
+  take('lumber',Math.min(cnt('lumber_mill')*2,Math.floor(n*.1)));
+  take('mill',Math.min(cnt('mill')*2,Math.floor(n*.08)));
+  take('bake',Math.min(cnt('bakery')*2,Math.floor(n*.08)));
   J.scout=0;
-  J.build=Math.min(Math.max(1,bs*2),Math.ceil(n*.2));
-  const r=Math.max(0,n-J.farm-J.mine-J.lumber-J.mill-J.bake-J.guard-J.scout-J.build);
-  const lowF=R.food<P*4;
-  J.food=Math.max(1,Math.round(r*(lowF?.5:.3)));
-  J.wood=Math.max(1,Math.round(r*(lowF?.35:.5)));
+  const r=base+rem,lowF=R.food<P*4;
+  J.food=Math.max(n>1?1:0,Math.round(r*(lowF?.5:.3)));
+  J.wood=Math.max(n>2?1:0,Math.round(r*(lowF?.35:.5)));
   J.stone=Math.max(0,r-J.food-J.wood);
   assign();
 }
@@ -1200,8 +1210,14 @@ $('jobs').addEventListener('click',e=>{
   const k=e.target.dataset.k;if(!k)return;
   const d=+e.target.dataset.d;
   autoOn=false;$('au').textContent='خودکار: خاموش';$('au').classList.remove('on');
-  if(d>0&&Object.values(J).reduce((a,b)=>a+b,0)>=V.length)return;
-  J[k]=Math.max(0,J[k]+d);assign();
+  const sum=()=>Object.values(J).reduce((a,b)=>a+b,0);
+  const biggest=ex=>{let big=null;for(const kk in J)if(kk!=ex&&J[kk]>0&&(!big||J[kk]>J[big]))big=kk;return big};
+  while(sum()>V.length){const bg=biggest(null);if(!bg)break;J[bg]--}
+  if(d>0){
+    if(sum()>=V.length){const bg=biggest(k);if(!bg)return;J[bg]--}
+    J[k]++;
+  }else J[k]=Math.max(0,J[k]-1);
+  assign();
 });
 $('au').onclick=()=>{
   autoOn=!autoOn;
